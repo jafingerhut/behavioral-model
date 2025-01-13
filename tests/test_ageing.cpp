@@ -129,11 +129,9 @@ class AgeingTest : public ::testing::Test {
     Field &f = pkt.get_phv()->get_field(this->testHeader1, 0);
     f.set(key);
     bool hit;
-    const ControlFlowNode *next_node;
-    (void) next_node;
     // lookup is enough to update timestamp (done in match unit),
     // no need for apply_action
-    table->lookup(pkt, &hit, handle, &next_node);
+    table->lookup(pkt, &hit, handle);
     return hit;
   }
 

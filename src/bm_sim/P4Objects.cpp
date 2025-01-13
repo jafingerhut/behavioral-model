@@ -1900,9 +1900,11 @@ P4Objects::init_pipelines(const Json::Value &cfg_root,
               << "' in its 'next_tables' object.",
               cfg_next_nodes);
         }
-        const Json::Value &cfg_next_node = cfg_next_nodes[action_name];
-        const ControlFlowNode *next_node = get_next_node(cfg_next_node);
-        table->set_next_node(action_id, next_node);
+        if (!next_is_hit_miss) {
+            const Json::Value &cfg_next_node = cfg_next_nodes[action_name];
+            const ControlFlowNode *next_node = get_next_node(cfg_next_node);
+            table->set_next_node(action_id, next_node);
+        }
         add_action_to_table(table_name, action_name, action);
         if (act_prof_name != "")
           add_action_to_act_prof(act_prof_name, action_name, action);

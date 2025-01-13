@@ -127,7 +127,7 @@ class TableSizeTwo : public ::testing::Test {
     match_unit = std::unique_ptr<MUType>(
         new MUType(t_size, key_builder, &lookup_factory));
     table = std::unique_ptr<MatchTable>(
-      new MatchTable("test_table", 0, std::move(match_unit), true));
+      new MatchTable("test_table_1", 0, std::move(match_unit), true));
     table->set_next_node(action_id, nullptr);
     table->set_next_node(action_id_1, nullptr);
     table->set_next_node_miss_default(&node_miss_default);
@@ -135,7 +135,7 @@ class TableSizeTwo : public ::testing::Test {
     match_unit = std::unique_ptr<MUType>(
         new MUType(t_size, key_builder_w_valid, &lookup_factory));
     table_w_valid = std::unique_ptr<MatchTable>(
-        new MatchTable("test_table", 0, std::move(match_unit)));
+        new MatchTable("test_table_w_valid", 0, std::move(match_unit)));
     table_w_valid->set_next_node(action_id, nullptr);
     table_w_valid->set_next_node(action_id_1, nullptr);
     table_w_valid->set_next_node_miss_default(&node_miss_default);
@@ -167,9 +167,7 @@ class TableSizeTwo : public ::testing::Test {
 
   const ActionEntry &lookup(const Packet &pkt, bool *hit,
                             entry_handle_t *handle) {
-    const ControlFlowNode *next_node;
-    (void)next_node;
-    return table->lookup(pkt, hit, handle, &next_node);
+    return table->lookup(pkt, hit, handle);
   }
 
   virtual void SetUp() {
@@ -842,7 +840,6 @@ TYPED_TEST(TableSizeTwo, Valid) {
   MatchErrorCode rc;
   entry_handle_t lookup_handle;
   bool hit;
-  const ControlFlowNode *next_node;
 
   rc = this->add_entry_w_valid(key_, valid, &handle);
   ASSERT_EQ(rc, MatchErrorCode::SUCCESS);
@@ -856,12 +853,12 @@ TYPED_TEST(TableSizeTwo, Valid) {
 
   h2.mark_invalid();
 
-  this->table_w_valid->lookup(pkt, &hit, &lookup_handle, &next_node);
+  this->table_w_valid->lookup(pkt, &hit, &lookup_handle);
   ASSERT_FALSE(hit);
 
   h2.mark_valid();
 
-  this->table_w_valid->lookup(pkt, &hit, &lookup_handle, &next_node);
+  this->table_w_valid->lookup(pkt, &hit, &lookup_handle);
   ASSERT_TRUE(hit);
 }
 
@@ -1080,9 +1077,7 @@ class TableIndirect : public ::testing::Test {
 
   const ActionEntry &lookup(const Packet &pkt, bool *hit,
                             entry_handle_t *handle) {
-    const ControlFlowNode *next_node;
-    (void)next_node;
-    return table->lookup(pkt, hit, handle, &next_node);
+    return table->lookup(pkt, hit, handle);
   }
 
   Packet get_pkt(int length) {
@@ -1581,9 +1576,7 @@ class TableIndirectWS : public ::testing::Test {
 
   const ActionEntry &lookup(const Packet &pkt, bool *hit,
                             entry_handle_t *handle) {
-    const ControlFlowNode *next_node;
-    (void)next_node;
-    return table->lookup(pkt, hit, handle, &next_node);
+    return table->lookup(pkt, hit, handle);
   }
 
   Packet get_pkt(int length) {
@@ -2052,9 +2045,7 @@ class TableBigMask : public ::testing::Test {
 
   const ActionEntry &lookup(const Packet &pkt, bool *hit,
                             entry_handle_t *handle) {
-    const ControlFlowNode *next_node;
-    (void)next_node;
-    return table->lookup(pkt, hit, handle, &next_node);
+    return table->lookup(pkt, hit, handle);
   }
 
   Packet get_pkt(int length) {
@@ -2332,9 +2323,7 @@ class AdvancedTest : public ::testing::Test {
 
   const ActionEntry &lookup(const Packet &pkt, bool *hit,
                             entry_handle_t *handle) {
-    const ControlFlowNode *next_node;
-    (void)next_node;
-    return table->lookup(pkt, hit, handle, &next_node);
+    return table->lookup(pkt, hit, handle);
   }
 
   Packet get_pkt() const {
@@ -3156,10 +3145,9 @@ TYPED_TEST_SUITE(TableBadInputKey, MUTypes);
 TYPED_TEST(TableBadInputKey, NonByteAligned) {
   entry_handle_t handle, lookup_handle;
   bool hit;
-  const ControlFlowNode *next_node;
   ASSERT_EQ(MatchErrorCode::SUCCESS, this->add_entry(&handle));
   auto pkt = this->gen_pkt();
-  this->table->lookup(pkt, &hit, &lookup_handle, &next_node);
+  this->table->lookup(pkt, &hit, &lookup_handle);
   ASSERT_TRUE(hit);
 }
 
@@ -3235,10 +3223,9 @@ TEST_F(TableRangeMatch, OneRange) {
   auto check_one = [this](unsigned int v, bool expected) {
     bool hit;
     entry_handle_t h;
-    const ControlFlowNode *next_node;
     Packet pkt = get_pkt();
     pkt.get_phv()->get_field(testHeader1, 0).set(v);
-    table->lookup(pkt, &hit, &h, &next_node);
+    table->lookup(pkt, &hit, &h);
     ASSERT_EQ(expected, hit);
   };
 
@@ -3274,11 +3261,10 @@ TEST_F(TableRangeMatch, TwoRanges) {
   auto check_one = [this](unsigned int v1, unsigned int v2, bool expected) {
     bool hit;
     entry_handle_t h;
-    const ControlFlowNode *next_node;
     Packet pkt = get_pkt();
     pkt.get_phv()->get_field(testHeader1, 0).set(v1);
     pkt.get_phv()->get_field(testHeader2, 0).set(v2);
-    table->lookup(pkt, &hit, &h, &next_node);
+    table->lookup(pkt, &hit, &h);
     ASSERT_EQ(expected, hit);
   };
 
@@ -3385,9 +3371,8 @@ class TableTernaryCache : public ::testing::Test {
   void lookup(MatchTable *table, const std::string &binary_key,
               entry_handle_t *lookup_handle) {
     bool hit;
-    const ControlFlowNode *next_node;
     auto pkt = get_pkt(binary_key);
-    table->lookup(pkt, &hit, lookup_handle, &next_node);
+    table->lookup(pkt, &hit, lookup_handle);
     ASSERT_TRUE(hit);
   }
 

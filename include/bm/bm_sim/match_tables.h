@@ -125,8 +125,7 @@ class MatchTableAbstract : public NamedP4Object {
   virtual MatchTableType get_table_type() const = 0;
 
   virtual const ActionEntry &lookup(const Packet &pkt, bool *hit,
-                                    entry_handle_t *handle,
-                                    const ControlFlowNode **next_node) = 0;
+                                    entry_handle_t *handle) = 0;
 
   virtual size_t get_num_entries() const = 0;
 
@@ -202,6 +201,8 @@ class MatchTableAbstract : public NamedP4Object {
 
   MatchTableAbstract(MatchTableAbstract &&other) = delete;
   MatchTableAbstract &operator=(MatchTableAbstract &&other) = delete;
+
+  const ControlFlowNode *get_next_node_miss() const;
 
  protected:
   using ReadLock = boost::shared_lock<boost::shared_mutex>;
@@ -335,8 +336,7 @@ class MatchTable : public MatchTableAbstract {
   }
 
   const ActionEntry &lookup(const Packet &pkt, bool *hit,
-                            entry_handle_t *handle,
-                            const ControlFlowNode **next_node) override;
+                            entry_handle_t *handle) override;
 
   size_t get_num_entries() const override {
     return match_unit->get_num_entries();
@@ -430,8 +430,7 @@ class MatchTableIndirect : public MatchTableAbstract {
   }
 
   const ActionEntry &lookup(const Packet &pkt, bool *hit,
-                            entry_handle_t *handle,
-                            const ControlFlowNode **next_node) override;
+                            entry_handle_t *handle) override;
 
   size_t get_num_entries() const override {
     return match_unit->get_num_entries();
@@ -516,8 +515,7 @@ class MatchTableIndirectWS : public MatchTableIndirect {
   }
 
   const ActionEntry &lookup(const Packet &pkt, bool *hit,
-                            entry_handle_t *handle,
-                            const ControlFlowNode **next_node) override;
+                            entry_handle_t *handle) override;
 
  public:
   static std::unique_ptr<MatchTableIndirectWS> create(

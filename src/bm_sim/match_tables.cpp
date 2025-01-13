@@ -67,20 +67,12 @@ create_match_unit(const std::string match_type, const size_t size,
 void
 ActionEntry::serialize(std::ostream *out) const {
   action_fn.serialize(out);
-  if (!next_node)
-    (*out) << "__NULL__" << "\n";
-  else
-    (*out) << next_node->get_name() << "\n";
+  (*out) << "\n";
 }
 
 void
 ActionEntry::deserialize(std::istream *in, const P4Objects &objs) {
   action_fn.deserialize(in, objs);
-  std::string next_node_name; (*in) >> next_node_name;
-  if (next_node_name != "__NULL__") {
-    next_node = objs.get_control_node(next_node_name);
-    assert(next_node);
-  }
 }
 
 MatchTableAbstract::MatchTableAbstract(
@@ -100,7 +92,67 @@ MatchTableAbstract::apply_action(Packet *pkt) {
   auto lock = lock_read();
   auto lock_impl = lock_impl_read();
 
-  const ActionEntry &action_entry = lookup(*pkt, &hit, &handle, &next_node);
+  const ActionEntry &action_entry = lookup(*pkt, &hit, &handle);
+
+  bool null_action_fn = (action_entry.action_fn.get_action_fn() == NULL) ? 1 : 0;
+  const bool debug = false;
+  const bool exit_if_null_action_fn = false;
+  if (debug) {
+    std::cout << "DBG apply_action()"
+              << " name=" << name
+              << " has_next_node_miss=" << has_next_node_miss
+              << " hit=" << hit
+              << " handle=" << handle
+              << " action_entry=" << action_entry
+              << " null_action_fn=" << null_action_fn
+              << std::flush;
+  }
+  if (hit) {
+      if (debug) {
+        std::cout << " call get_next_node()" << std::flush;
+      }
+      next_node = get_next_node(action_entry.action_fn.get_action_id());
+  } else if (null_action_fn == 1) {
+      if (exit_if_null_action_fn) {
+        // Note: I executed all p4c bmv2 tests with
+        // exit_if_null_action_fn true, and they all passed.  Thus
+        // this case of hit==false and null_action_fn==1 _never_
+        // occurred during "normal" execution of BMv2, which loads
+        // compiled P4 programs from BMv2 JSON files.  This branch
+        // _is_ sometimes executed when running BMv2's unit tests in
+        // the test_tables program.  I believe this is happening
+        // because those tests create tables that have been
+        // initialized in a different way than ones created by loading
+        // BMv2 JSON files.
+        std::cout << "\n";
+        std::cout << "Exiting because we got a miss on table '" << name
+                  << "' and action_entry had a null action_fn\n" << std::flush;
+        exit(1);
+      }
+      if (debug) {
+        std::cout << " returning next_node_miss" << std::flush;
+      }
+      // As a workaround to pass all tests in test_tables, return
+      // next_node_miss in this case, even if has_next_node_miss is
+      // false.
+      next_node = next_node_miss;
+  } else {
+      if (debug) {
+        std::cout << " call get_next_node_default()" << std::flush;
+      }
+      next_node = get_next_node_default(action_entry.action_fn.get_action_id());
+  }
+  if (debug) {
+    if (next_node) {
+      std::cout << " next_node.name=" << next_node->get_name()
+                << " id=" << next_node->get_id()
+                << std::flush;
+    } else {
+      std::cout << " next_node=(null)"
+                << std::flush;
+    }
+    std::cout << "\n" << std::flush;
+  }
 
   // TODO(antonin): I hate this part, which requires this class to know that the
   // lower 24 bits of the handle are used as an index. Is is expected that few
@@ -153,9 +205,7 @@ MatchTableAbstract::set_default_default_entry(const ActionFn *action_fn,
   assert(action_data.size() == action_fn->get_num_params());
   ActionFnEntry action_fn_entry(action_fn, std::move(action_data));
 
-  const auto *next_node = get_next_node_default(action_fn->get_id());
-
-  default_default_entry = ActionEntry(std::move(action_fn_entry), next_node);
+  default_default_entry = ActionEntry(std::move(action_fn_entry));
   const_default_entry = is_const;
 
   set_default_default_entry_();
@@ -168,10 +218,6 @@ void
 MatchTableAbstract::serialize(std::ostream *out) const {
   auto lock = lock_read();
   (*out) << name << "\n";
-  if (!next_node_miss)
-    (*out) << "__NULL__" << "\n";
-  else
-    (*out) << next_node_miss->get_name() << "\n";
   serialize_(out);
 }
 
@@ -180,11 +226,6 @@ MatchTableAbstract::deserialize(std::istream *in, const P4Objects &objs) {
   auto lock = lock_write();
   std::string name_sentinel; (*in) >> name_sentinel;
   assert(name_sentinel == name);
-  std::string next_node_miss_name; (*in) >> next_node_miss_name;
-  if (next_node_miss_name != "__NULL__") {
-    next_node_miss = objs.get_control_node(next_node_miss_name);
-    assert(next_node_miss);
-  }
   deserialize_(in, objs);
 }
 
@@ -204,7 +245,6 @@ void
 MatchTableAbstract::set_next_node_miss(const ControlFlowNode *next_node) {
   has_next_node_miss = true;
   next_node_miss = next_node;
-  default_default_entry.next_node = next_node;
   set_default_default_entry_();
 }
 
@@ -213,7 +253,6 @@ MatchTableAbstract::set_next_node_miss_default(
     const ControlFlowNode *next_node) {
   if (has_next_node_miss) return;
   next_node_miss = next_node;
-  default_default_entry.next_node = next_node;
   set_default_default_entry_();
 }
 
@@ -336,6 +375,11 @@ MatchTableAbstract::get_next_node_default(p4object_id_t action_id) const {
   return next_nodes.at(action_id);
 }
 
+const ControlFlowNode *
+MatchTableAbstract::get_next_node_miss() const {
+  return next_node_miss;
+}
+
 void
 MatchTableAbstract::set_entry_common_info(EntryCommon *entry) const {
   if (!with_ageing) return;
@@ -368,13 +412,11 @@ MatchTable::MatchTable(
       match_unit(std::move(match_unit)) { }
 
 const ActionEntry &
-MatchTable::lookup(const Packet &pkt, bool *hit, entry_handle_t *handle,
-                   const ControlFlowNode **next_node) {
+MatchTable::lookup(const Packet &pkt, bool *hit, entry_handle_t *handle) {
   MatchUnitAbstract<ActionEntry>::MatchUnitLookup res = match_unit->lookup(pkt);
   *hit = res.found();
   *handle = res.handle;
   const auto &entry = (*hit) ? (*res.value) : default_entry;
-  *next_node = entry.next_node;
   return entry;
 }
 
@@ -389,8 +431,6 @@ MatchTable::add_entry(const std::vector<MatchKeyParam> &match_key,
     return MatchErrorCode::BAD_ACTION_DATA;
   ActionFnEntry action_fn_entry(action_fn, std::move(action_data));
 
-  const ControlFlowNode *next_node = get_next_node(action_fn->get_id());
-
   MatchErrorCode rc = MatchErrorCode::SUCCESS;
 
   {
@@ -398,7 +438,7 @@ MatchTable::add_entry(const std::vector<MatchKeyParam> &match_key,
 
     rc = match_unit->add_entry(
         match_key,
-        ActionEntry(std::move(action_fn_entry), next_node),
+        ActionEntry(std::move(action_fn_entry)),
         handle, priority);
   }
 
@@ -451,14 +491,12 @@ MatchTable::modify_entry(entry_handle_t handle,
     return MatchErrorCode::BAD_ACTION_DATA;
   ActionFnEntry action_fn_entry(action_fn, std::move(action_data));
 
-  const ControlFlowNode *next_node = get_next_node(action_fn->get_id());
-
   MatchErrorCode rc = MatchErrorCode::SUCCESS;
 
   {
     auto lock = lock_write();
     rc = match_unit->modify_entry(
-        handle, ActionEntry(std::move(action_fn_entry), next_node));
+        handle, ActionEntry(std::move(action_fn_entry)));
   }
 
   if (rc == MatchErrorCode::SUCCESS) {
@@ -484,11 +522,9 @@ MatchTable::set_default_action(const ActionFn *action_fn,
     return MatchErrorCode::BAD_ACTION_DATA;
   ActionFnEntry action_fn_entry(action_fn, std::move(action_data));
 
-  const ControlFlowNode *next_node = get_next_node_default(action_fn->get_id());
-
   {
     auto lock = lock_write();
-    default_entry = ActionEntry(std::move(action_fn_entry), next_node);
+    default_entry = ActionEntry(std::move(action_fn_entry));
   }
 
   BMLOG_DEBUG("Set default entry for table '{}': {}",
@@ -694,9 +730,8 @@ MatchTableIndirect::get_action_profile() const {
 }
 
 const ActionEntry &
-MatchTableIndirect::lookup(const Packet &pkt,
-                           bool *hit, entry_handle_t *handle,
-                           const ControlFlowNode **next_node) {
+MatchTableIndirect::lookup(const Packet &pkt, bool *hit,
+                           entry_handle_t *handle) {
   MatchUnitAbstract<IndirectIndex>::MatchUnitLookup res =
     match_unit->lookup(pkt);
   *hit = res.found();
@@ -705,7 +740,6 @@ MatchTableIndirect::lookup(const Packet &pkt,
   // default_default_entry will be an empty (no-op) action unless otherwise
   // specified in the P4 / JSON
   if (!(*hit) && !default_set) {
-    *next_node = default_default_entry.next_node;
     return default_default_entry;
   }
 
@@ -717,12 +751,6 @@ MatchTableIndirect::lookup(const Packet &pkt,
   }
 
   const auto &entry = action_profile->lookup(pkt, index);
-  // Unfortunately this has to be done at this stage and cannot be done when
-  // inserting a member because for 2 match tables sharing the same action
-  // profile (and therefore the same members), the next node mapping can vary
-  *next_node = (*hit) ?
-      get_next_node(entry.action_fn.get_action_id()) :
-      get_next_node_default(entry.action_fn.get_action_id());
   return entry;
 }
 
@@ -998,9 +1026,8 @@ MatchTableIndirectWS::create(const std::string &match_type,
 
 const ActionEntry &
 MatchTableIndirectWS::lookup(const Packet &pkt, bool *hit,
-                             entry_handle_t *handle,
-                             const ControlFlowNode **next_node) {
-  return MatchTableIndirect::lookup(pkt, hit, handle, next_node);
+                             entry_handle_t *handle) {
+  return MatchTableIndirect::lookup(pkt, hit, handle);
 }
 
 MatchErrorCode

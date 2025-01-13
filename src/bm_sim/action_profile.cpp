@@ -216,9 +216,7 @@ ActionProfile::add_member(const ActionFn *action_fn, ActionData action_data,
       rc = MatchErrorCode::ERROR;
     } else {
       *mbr = static_cast<mbr_hdl_t>(mbr_);
-      // next node is nullptr at this stage (resolved by MatchTableIndirect
-      // during lookup)
-      entries_insert(*mbr, ActionEntry(std::move(action_fn_entry), nullptr));
+      entries_insert(*mbr, ActionEntry(std::move(action_fn_entry)));
       num_members++;
     }
   }
@@ -278,9 +276,7 @@ ActionProfile::modify_member(mbr_hdl_t mbr, const ActionFn *action_fn,
     if (!is_valid_mbr(mbr)) {
       rc = MatchErrorCode::INVALID_MBR_HANDLE;
     } else {
-      // next node is nullptr at this stage (resolved by MatchTableIndirect
-      // during lookup)
-      action_entries[mbr] = ActionEntry(std::move(action_fn_entry), nullptr);
+      action_entries[mbr] = ActionEntry(std::move(action_fn_entry));
     }
   }
 

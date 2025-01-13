@@ -32,8 +32,8 @@ namespace bm {
 struct ActionEntry {
   ActionEntry() { }
 
-  ActionEntry(ActionFnEntry action_fn, const ControlFlowNode *next_node)
-      : action_fn(std::move(action_fn)), next_node(next_node) { }
+  ActionEntry(ActionFnEntry action_fn)
+      : action_fn(std::move(action_fn)) { }
 
   void dump(std::ostream *stream) const {
     action_fn.dump(stream);
@@ -54,7 +54,6 @@ struct ActionEntry {
   ActionEntry &operator=(ActionEntry &&other) /*noexcept*/ = default;
 
   ActionFnEntry action_fn{};
-  const ControlFlowNode *next_node{nullptr};
 };
 
 }  // namespace bm
