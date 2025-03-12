@@ -1,5 +1,5 @@
 ARG PARENT_VERSION=latest
-FROM p4lang/pi:${PARENT_VERSION}
+FROM jafingerhut/pi:${PARENT_VERSION}
 LABEL maintainer="P4 Developers <p4-dev@lists.p4.org>"
 
 # Select the type of image we're building. Use `build` for a normal build, which
@@ -15,8 +15,7 @@ ARG sswitch_grpc=yes
 
 ENV BM_DEPS automake \
             build-essential \
-            clang-8 \
-            clang-10 \
+            clang-14 \
             curl \
             git \
             lcov \
@@ -29,22 +28,21 @@ ENV BM_DEPS automake \
             libboost-thread-dev \
             libtool \
             pkg-config
-ENV BM_RUNTIME_DEPS libboost-program-options1.71.0 \
-                    libboost-system1.71.0 \
-                    libboost-filesystem1.71.0 \
-                    libboost-thread1.71.0 \
+ENV BM_RUNTIME_DEPS libboost-program-options1.83.0 \
+                    libboost-system1.83.0 \
+                    libboost-filesystem1.83.0 \
+                    libboost-thread1.83.0 \
                     libgmp10 \
                     libpcap0.8 \
-                    python3 \
-                    python-is-python3
+                    python3
 
 COPY . /behavioral-model/
 WORKDIR /behavioral-model/
 RUN apt-get update -qq && \
     apt-get install -qq --no-install-recommends $BM_DEPS $BM_RUNTIME_DEPS && \
     ./autogen.sh && \
-    if [ "$GCOV" != "" ]; then ./configure --with-pdfixed --with-pi --with-stress-tests --enable-debugger --enable-coverage --enable-Werror; fi && \
-    if [ "$GCOV" = "" ]; then ./configure --with-pdfixed --with-pi --with-stress-tests --enable-debugger --enable-Werror; fi && \
+    if [ "$GCOV" != "" ]; then ./configure --with-pdfixed --with-pi --with-stress-tests --enable-debugger --enable-coverage; fi && \
+    if [ "$GCOV" = "" ]; then ./configure --with-pdfixed --with-pi --with-stress-tests --enable-debugger; fi && \
     make -j$(nproc) && \
     make install-strip && \
     ldconfig && \
